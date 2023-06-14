@@ -5,18 +5,18 @@
 
 // WiFi - Configuration
 //===================================================
-const char* ssid = "Home of Meat and Vegetables";
-const char* password = "Password2021";
+const char* ssid = "ENTER YOUR WIFI NAME HERE";
+const char* password = "ENTER YOUR WIFI PASSWORD HERE";
 //===================================================
 
 // WiFi - WAP2 Enterprise Configuration
 // set this to true if you want to connect to eduroam
 // set this to false if you want to connect to other Wi-Fi
-bool UseWAPEnterprise = false;
+bool UseWAPEnterprise = true;
 //===================================================
 const char* WAP2_SSID = "eduroam";
-const char* EAP_IDENTITY = "zhouvp@bc.edu";
-const char* EAP_PASSWORD = "Shen19bc123457";
+const char* EAP_IDENTITY = "ENTER YOUR EDUROAM USERNAME WITH @BC.EDU";
+const char* EAP_PASSWORD = "ENTER YOUR EDUROAM PASSWORD";
 //===================================================
 
 
