@@ -115,7 +115,37 @@
                     <button id="button_UPDATE_THRESH" class="button">Update Threshold</button>
                 </p>
                 
+                <p style="color: #9c9c9c; font-size: 1rem;">
+                You can only update this Threshold <br> about ~100,000 times before unpredictable <br> corruption in the EEPROM memory.</p>
+                <p style="color: #9c9c9c; font-size: 1rem;">
+                (That's about 15 times per day for 18 years)</p>
+                
 
+            </div>
+            <br>
+            <br>
+            <div class="card">
+                <h2>EMG Sensor Modes</h2>
+                <p>
+                    <button id="button_triggermode" class="button" style="padding: 15px 15px; background-color: #acacac;" onclick="setmode(1);">
+                        Trigger Mode
+                    </button>
+                </p>
+                <p>
+                    <button id="button_holdmode" class="button" style="padding: 15px 15px; background-color: #acacac;" onclick="setmode(2);">
+                        Hold Mode
+                    </button>
+                </p>
+                <p>
+                    <button id="button_togglemode" class="button" style="padding: 15px 15px; background-color: #acacac;" onclick="setmode(3);">
+                        Toggle Mode
+                    </button>
+                </p>
+                <p style="color: #9c9c9c; font-size: 1rem; text-align: left; padding: 30px">
+                <b>Trigger Mode:</b> This mode will engage the switch only for 0.5 seconds upon each activation <br><br>
+                <b>Hold Mode:</b> Switch will remain engaged as long as the reading is above the threshold <br><br>
+                <b>Toggle Mode:</b> The first activation will engage the switch, and the next activation will disengage the switch
+                </p>
             </div>
             <br>
             <br>
@@ -169,6 +199,10 @@
                     <button id="button_enable" class="button" style="padding: 15px 40px; background-color: #00BB55;">Enable</button>
                     <button id="button_disable" class="button" style="padding: 15px 40px; background-color: #FF3333;">Disable</button>
                 </p>
+                <p style="color: #9c9c9c; font-size: 1rem;">
+                You can only update this setting <br> about ~100,000 times before unpredictable <br> corruption in the EEPROM memory.</p>
+                <p style="color: #9c9c9c; font-size: 1rem;">
+                (That's about 15 times per day for 18 years)</p>
             </div>
             <br>
             <br>
@@ -191,12 +225,12 @@
                 <p class="state">Get help here</p>
                 
                 
-                <button id="button_help" class="button" onclick="window.location.href='https://drive.google.com/drive/folders/1nD83zP2qYV-7mvF2n2yecVb5Hgfm7Zpj?usp=share_link';">
+                <button id="button_help" class="button" onclick="window.location.href='https://drive.google.com/drive/folders/1RGVvjZ1_Rz7jw_xv73Eo7cYM92gn1qjR?usp=sharing';">
                     User Manual
                 </button>
                 <br>
                 <br>
-                <button id="button_help" class="button" onclick="window.location.href='https://github.com/EvanZhou1999';">
+                <button id="button_help" class="button" onclick="window.location.href='https://github.com/EvanZhou1999/Accessible_EMG_Switch';">
                     Source Code
                 </button>
                 
@@ -219,7 +253,8 @@
             
             function updateSetting() {
                 getThreshold();
-                getVibrationStatus()
+                getVibrationStatus();
+                getEMGMode();
             }
             
             function getEMGreading() {
@@ -231,6 +266,45 @@
                 };
                 xhttp.open("GET", "reading/emg", true);
                 xhttp.send();
+            }
+            
+            // This will color the EMG Mode buttons (with selected mode being green)
+            function getEMGMode() {
+                console.log("sending request for getting the device mode");
+                var xhttp = new XMLHttpRequest();
+                xhttp.onreadystatechange = function() {
+                    if (this.readyState == 4 && this.status == 200) {
+                        if (this.responseText == 1) { // Trigger mode
+                            document.getElementById("button_triggermode").style.backgroundColor = "#00BB55";
+                            document.getElementById("button_holdmode").style.backgroundColor = "#ACACAC";
+                            document.getElementById("button_togglemode").style.backgroundColor = "#ACACAC";
+                        }else if (this.responseText == 2){ // Hold Mode
+                            document.getElementById("button_triggermode").style.backgroundColor = "#ACACAC";
+                            document.getElementById("button_holdmode").style.backgroundColor = "#00BB55";
+                            document.getElementById("button_togglemode").style.backgroundColor = "#ACACAC";
+                        }else if (this.responseText == 3){ // Toggle Mode
+                            document.getElementById("button_triggermode").style.backgroundColor = "#ACACAC";
+                            document.getElementById("button_holdmode").style.backgroundColor = "#ACACAC";
+                            document.getElementById("button_togglemode").style.backgroundColor = "#00BB55";
+                        }else{
+                            console.log("[Error]getEMGMode - Unknown EMG Mode Code");
+                            console.log(this.responseText);
+                        }
+                    }
+                };
+                xhttp.open("GET", "getsetting/mode", true);
+                xhttp.send();
+            }
+            
+            function setmode(mode) {
+                // Send Request
+                var xhttp = new XMLHttpRequest();
+                xhttp.onreadystatechange = function() {
+                    getEMGMode();
+                };
+                xhttp.open("GET", "set/emgmode?mode="+mode, true);
+                xhttp.send();
+                
             }
             
             function switchClick() {

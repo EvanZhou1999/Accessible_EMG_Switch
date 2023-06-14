@@ -60,6 +60,11 @@
 #define STRENGTH_HIGH 250
 #define VIBRATION_SETTING_ADDR 1
 
+// Switch Modes
+#define TRIGGER_MODE 1 // e.g. Grip Once to turn on for 0.5 seconds
+#define HOLD_MODE 2 // e.g. Grip to engage, release to disengage
+#define TOGGLE_MODE 3 // Grip to engage and grip again to disengage
+
 /*
  * =======================================================
  * Instantiate Global Objects/Devices
@@ -76,7 +81,11 @@ AsyncWebServer server(80);
  * =======================================================
  */
 
+// Current EMG Switch Mode
+int EMGMode = TRIGGER_MODE; // Set Default mode to Trigger Mode
+bool EMGactivated = true; // true=emgswitch is engaged, false=emgswitch is not engaged
 // Reading acquired from EMG Sensor
+int PrevReading = 0;
 int EMGreading = 0;
 // Sensor will take the average of the following BatchSize and save as its reading
 const int sampleBatchSize = 50;
@@ -118,9 +127,9 @@ void handleClick (AsyncWebServerRequest *request) {
 
     if(WiFi.status() == WL_CONNECTED){
         if(UseWAPEnterprise){
-            httpGetRequest("http://wifiswitch01.bc.edu/control/click");
+            httpGetRequest("http://wifiswitch01.bc.edu/control/click?interval=700");
         }else{
-            httpGetRequest("http://wifiswitch01.local/control/click");
+            httpGetRequest("http://wifiswitch01.local/control/click?interval=700");
         }
     }
 
@@ -170,6 +179,13 @@ void updateVibrationStatus (AsyncWebServerRequest *request) {
     }
 }
 
+void updateDeviceMode (AsyncWebServerRequest *request) {
+    String Mode = String(EMGMode);
+
+    // Respond sensor reading with 200 response
+    request->send_P(200, "text/plain", Mode.c_str());
+}
+
 void handleChangeThreshold (AsyncWebServerRequest *request) {
     String paramValue;
     if (request->hasParam("value") ) {
@@ -181,6 +197,18 @@ void handleChangeThreshold (AsyncWebServerRequest *request) {
         EEPROM.commit();
     }else{
         Serial.println("[ERROR] >>> handleChangeThreshold: no url Param - value");
+    }
+    request->send_P(200, "text/plain", "OK");
+}
+
+void handleChangeMode (AsyncWebServerRequest *request) {
+    String param;
+    if (request->hasParam("mode") ) {
+        param = request->getParam("mode")->value();
+        // Update and Store value to eeprom
+        EMGMode = param.toInt();
+    }else{
+        Serial.println("[ERROR] >>> handleChangeMode: no url Param - mode");
     }
     request->send_P(200, "text/plain", "OK");
 }
@@ -338,7 +366,8 @@ int getEMGreading(){
         sampledReading += analogRead(EMG_SENSOR_PIN);
         vTaskDelay(5 / portTICK_PERIOD_MS); 
     }
-    
+
+    PrevReading = EMGreading;
     EMGreading = int(sampledReading/sampleBatchSize);
     Serial.println(EMGreading);
     return EMGreading;
@@ -354,7 +383,7 @@ void device_vibrate(int strength, int durationmillis){
     ledcWrite(MOTOR_CHANNEL, 0);
 }
 
-// Activate Switch
+// Activate Switch for a period of time
 void activate_Switch() {
     // Display animation
     LED_Message_queue_send(LED_CIRCLE_IN, 0, 40, 40, false);
@@ -364,15 +393,15 @@ void activate_Switch() {
     }
     
     // Engage Switch for 0.5 seconds
-        digitalWrite(SOFT_RELAY_PIN, HIGH);
-        vTaskDelay(700 / portTICK_PERIOD_MS);
-        digitalWrite(SOFT_RELAY_PIN, LOW);
+    digitalWrite(SOFT_RELAY_PIN, HIGH);
+    vTaskDelay(700 / portTICK_PERIOD_MS);
+    digitalWrite(SOFT_RELAY_PIN, LOW);
 
     if(WiFi.status() == WL_CONNECTED){
         if(UseWAPEnterprise){
-            httpGetRequest("http://wifiswitch01.bc.edu/control/click");
+            httpGetRequest("http://wifiswitch01.bc.edu/control/click?interval=700");
         }else{
-            httpGetRequest("http://wifiswitch01.local/control/click");
+            httpGetRequest("http://wifiswitch01.local/control/click?interval=700");
         }
     }
 
@@ -382,6 +411,85 @@ void activate_Switch() {
 
     // return to normal status indicator
     LED_Message_queue_send(LED_PERSIST_STATUS_2, color_normal_r, color_normal_g, color_normal_b, false);
+}
+
+// Activate Switch and stay on
+void Switch_on() {
+    // Display animation
+    LED_Message_queue_send(LED_CIRCLE_IN, 0, 40, 40, false);
+
+    if (enableVibration) {
+        device_vibrate(STRENGTH_HIGH, 800);
+    }
+    
+    // Engage the Switch
+    digitalWrite(SOFT_RELAY_PIN, HIGH);
+
+    if(WiFi.status() == WL_CONNECTED){
+        if(UseWAPEnterprise){
+            httpGetRequest("http://wifiswitch01.bc.edu/control/ativate");
+        }else{
+            httpGetRequest("http://wifiswitch01.local/control/activate");
+        }
+    }
+}
+
+// Deactivate the Switch and stay off
+void Switch_off() {
+    // Disengage the Switch
+        digitalWrite(SOFT_RELAY_PIN, LOW);
+
+        if(WiFi.status() == WL_CONNECTED){
+            if(UseWAPEnterprise){
+                httpGetRequest("http://wifiswitch01.bc.edu/control/deactivate");
+            }else{
+                httpGetRequest("http://wifiswitch01.local/control/deactivate");
+            }
+        }
+    
+        // Display animation
+        LED_Message_queue_send(LED_LOAD_OUT, 0, 40, 40, false);
+    
+    
+        // return to normal status indicator
+        LED_Message_queue_send(LED_PERSIST_STATUS_2, color_normal_r, color_normal_g, color_normal_b, false);
+}
+
+void onSwitchActivation() {
+    if (EMGMode == TRIGGER_MODE) {
+        activate_Switch();
+    }else if (EMGMode == HOLD_MODE) {
+        Switch_on();
+        EMGactivated = true;
+    }else if (EMGMode == TOGGLE_MODE) {
+        if (EMGactivated) {
+            if (enableVibration) {
+                device_vibrate(STRENGTH_HIGH, 800);
+            }
+            Switch_off();
+            EMGactivated = false;
+        }else{
+            Switch_on();
+            EMGactivated = true;
+        }
+    }else {
+        Serial.print("[ERROR] >>> onSwitchActivation: unrecognized EMGMode - ");
+        Serial.println(EMGMode);
+    }
+}
+
+void onSwitchDeactivation() {
+    if (EMGMode == TRIGGER_MODE) {
+        // nothing to do here
+    }else if (EMGMode == HOLD_MODE) {
+        Switch_off();
+        EMGactivated = false;
+    }else if (EMGMode == TOGGLE_MODE) {
+        // nothing to do here
+    }else {
+        Serial.print("[ERROR] >>> onSwitchDeactivation: unrecognized EMGMode - ");
+        Serial.println(EMGMode);
+    }
 }
 
 void httpGetRequest(const char* serverName){
@@ -481,9 +589,11 @@ void setup() {
         server.on("/reading/emg",  updateEMGreading);
         server.on("/getsetting/threshold",  updateThresholdValue);
         server.on("/getsetting/vibration",  updateVibrationStatus);
+        server.on("/getsetting/mode",  updateDeviceMode);
         server.on("/set/vibration",  handleChangeVibration);  
         server.on("/set/threshold", handleChangeThreshold);
         server.on("/set/indicator", handleChangeColor);
+        server.on("/set/emgmode", handleChangeMode);
          
         
     
@@ -514,12 +624,14 @@ void setup() {
  * =======================================================
  */
 void loop() {
+    getEMGreading();
 
-    if(getEMGreading() > EMGthreshold){
-        activate_Switch();
-        while(getEMGreading() > EMGthreshold){
-            // blocking
-        }
+    if(EMGreading > EMGthreshold && PrevReading < EMGthreshold){
+        onSwitchActivation();
+    }
+
+    if(EMGreading < EMGthreshold && PrevReading > EMGthreshold){
+        onSwitchDeactivation();
     }
     //Serial.println(EMGreading);
     vTaskDelay(10 / portTICK_PERIOD_MS); // Delay 100 millisecond
